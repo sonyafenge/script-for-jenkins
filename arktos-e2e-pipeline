@@ -13,7 +13,6 @@ pipeline {
                 sh '''#!/bin/bash
                 set -e
                 
-                echo ${params.userFlag}
                 export GOROOT=/usr/local/go
                 export GOPATH=$PWD
                 export PATH=$GOROOT/bin:$HOME/bin:$GOPATH/bin:$PATH
