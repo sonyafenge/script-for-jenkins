@@ -1,0 +1,302 @@
+pipeline {
+    agent none
+    stages {
+        stage('Build') {
+            agent { 
+                label 'e2e-slave1'
+            }
+            steps {
+                dir('src/k8s.io/kubernetes') {
+                    git branch: 'hc-test', credentialsId: 'ed65dd2c-2efa-48a8-bd14-6baef33ba29f', url: 'https://github.com/Hong-Chang/arktos'
+                }
+                
+                sh '''#!/bin/bash
+                set -e
+                
+                echo ${params.userFlag}
+                export GOROOT=/usr/local/go
+                export GOPATH=$PWD
+                export PATH=$GOROOT/bin:$HOME/bin:$GOPATH/bin:$PATH
+                export KUBE_ROOT=$GOPATH/src/k8s.io/kubernetes
+                
+                pwd
+                cd $KUBE_ROOT
+                
+                make clean
+                source $KUBE_ROOT/aws_build_version && make quick-release
+                
+                source $KUBE_ROOT/aws_kube_params.inc
+                PRESET_KUBE_MASTER_IP=$PARAMS_KUBE_MASTER_IP
+                PRESET_INSTANCES_ENABLED=true
+                IS_DRY_RUN=true
+                
+                chmod 755 $KUBE_ROOT/cluster/kube-up.sh
+                $KUBE_ROOT/cluster/kube-up.sh
+                cp /tmp/master-user-data $GOPATH/master-user-data
+                cp /tmp/node-user-data $GOPATH/node-user-data
+                
+                '''
+                stash includes: 'src/k8s.io/kubernetes/_output/release-tars/kubernetes-server-linux-amd64.tar.gz', name: 'ServerBinaryTar'
+                stash includes: 'master-user-data', name: 'master-user-data'
+                stash includes: 'node-user-data', name: 'node-user-data'
+				stash includes: 'src/k8s.io/kubernetes/cluster/aws/configure-vm.sh', name: 'configure-vm.sh'
+				stash includes: 'src/k8s.io/kubernetes/cluster/aws/cleanup-preset-vm.sh', name: 'cleanup-preset-vm.sh'
+				stash includes: 'src/k8s.io/kubernetes/_output/dockerized/bin/linux/amd64/kubectl', name: 'kubectl'
+            }
+        }
+        stage('TeardownNodes') {
+            parallel {
+                stage('TeardownMaster') {
+                    agent { 
+                        label 'e2e-slave2'
+                    }
+                    steps {
+                        unstash 'cleanup-preset-vm.sh'
+                        sh '''#!/bin/bash
+                        set -e
+                        
+                        export GOROOT=/usr/local/go
+                        export GOPATH=$PWD
+                        export PATH=$GOROOT/bin:$HOME/bin:$GOPATH/bin:$PATH
+                        export KUBE_ROOT=$GOPATH/src/k8s.io/kubernetes
+                        
+                        pwd
+                        
+                        chmod 755 $KUBE_ROOT/cluster/aws/cleanup-preset-vm.sh
+                        sudo $KUBE_ROOT/cluster/aws/cleanup-preset-vm.sh
+                        
+                        sudo shutdown -r +1 "Server will restart in 1 minute." & disown
+                        
+                        '''
+                    }
+                }
+                stage('TeardownMinion1') {
+                    agent { 
+                        label 'e2e-slave3'
+                    }
+                    steps {
+						unstash 'cleanup-preset-vm.sh'
+                        sh '''#!/bin/bash
+                        set -e
+                        
+                        export GOROOT=/usr/local/go
+                        export GOPATH=$PWD
+                        export PATH=$GOROOT/bin:$HOME/bin:$GOPATH/bin:$PATH
+                        export KUBE_ROOT=$GOPATH/src/k8s.io/kubernetes
+                        
+                        pwd
+                        
+                        chmod 755 $KUBE_ROOT/cluster/aws/cleanup-preset-vm.sh
+                        sudo $KUBE_ROOT/cluster/aws/cleanup-preset-vm.sh
+                        
+                        sudo shutdown -r +1 "Server will restart in 1 minute." & disown
+                        
+                        '''
+                    }
+                }
+            }
+        }
+        stage('WaitingReboot') {
+            agent { 
+                label 'e2e-slave1'
+            }
+            steps {
+                sh '''#!/bin/bash
+                set -e
+                
+                sleep 60
+                
+                '''
+            }
+        }
+		stage('Cleanup') {
+            parallel {
+				stage('CleanupMaster') {
+					agent { 
+						label 'e2e-slave2'
+					}
+					steps {
+						sh '''
+						set -e
+						
+						sudo rm -rf /etc/motd
+						sudo rm -rf /etc/systemd/system/multi-user.target.wants/kubelet.service
+						sudo rm -rf /etc/kubernetes
+						sudo rm -rf /etc/srv/kubernetes
+						sudo rm -rf /etc/systemd/system/kubelet.service.d
+						sudo rm -rf /home/ubuntu/.kube/
+						sudo rm -rf /lib/systemd/system/kubelet.service
+						sudo rm -rf /mnt/master-pd
+						sudo rm -rf /root/.kube
+						sudo rm -rf /srv/kubernetes
+						sudo rm -rf /tmp/bootstrap-script  
+						sudo rm -rf /tmp/kubernetes-server-linux-amd64.tar.gz
+						sudo rm -rf /tmp/master-user-data  
+						sudo rm -rf /usr/bin/kubeadm
+						sudo rm -rf /usr/bin/kubectl
+						sudo rm -rf /usr/bin/kubelet
+						sudo rm -rf /usr/libexec/kubernetes
+						sudo rm -rf /usr/libexec/kubernetes/kubelet-plugins
+						sudo rm -rf /usr/local/bin/kube-proxy
+						sudo rm -rf /usr/share/sosreport/sos/plugins/__pycache__/kubernetes.cpython-35.pyc
+						sudo rm -rf /usr/share/sosreport/sos/plugins/kubernetes.py  
+						sudo rm -rf /usr/bin/kubelet
+						sudo rm -rf /var/log/containers/* 
+						sudo rm -rf /var/log/workload-controller-manager.log 
+						sudo rm -rf /var/cache/kubernetes-install
+						sudo rm -rf /var/log/pods  
+						sudo rm -rf /usr/share/sosreport/sos/plugins/__pycache__/etcd.cpython-35.pyc
+						sudo rm -rf /usr/share/sosreport/sos/plugins/etcd.py
+						sudo rm -rf /var/lib/etcd
+						sudo rm -rf /var/etcd 
+						sudo rm -rf /var/lib/kubelet
+						
+						'''
+					}
+				}
+				stage('CleanupMinion1') {
+					agent { 
+						label 'e2e-slave3'
+					}
+					steps {
+						sh '''
+						set -e
+						
+						sudo rm -rf /etc/motd
+						sudo rm -rf /etc/systemd/system/multi-user.target.wants/kubelet.service
+						sudo rm -rf /etc/kubernetes
+						sudo rm -rf /etc/srv/kubernetes
+						sudo rm -rf /etc/systemd/system/kubelet.service.d
+						sudo rm -rf /home/ubuntu/.kube/
+						sudo rm -rf /lib/systemd/system/kubelet.service
+						sudo rm -rf /mnt/master-pd
+						sudo rm -rf /root/.kube
+						sudo rm -rf /srv/kubernetes
+						sudo rm -rf /tmp/bootstrap-script  
+						sudo rm -rf /tmp/kubernetes-server-linux-amd64.tar.gz
+						sudo rm -rf /tmp/master-user-data  
+						sudo rm -rf /usr/bin/kubeadm
+						sudo rm -rf /usr/bin/kubectl
+						sudo rm -rf /usr/bin/kubelet
+						sudo rm -rf /usr/libexec/kubernetes
+						sudo rm -rf /usr/libexec/kubernetes/kubelet-plugins
+						sudo rm -rf /usr/local/bin/kube-proxy
+						sudo rm -rf /usr/share/sosreport/sos/plugins/__pycache__/kubernetes.cpython-35.pyc
+						sudo rm -rf /usr/share/sosreport/sos/plugins/kubernetes.py  
+						sudo rm -rf /usr/bin/kubelet
+						sudo rm -rf /var/log/containers/* 
+						sudo rm -rf /var/log/workload-controller-manager.log 
+						sudo rm -rf /var/cache/kubernetes-install
+						sudo rm -rf /var/log/pods  
+						sudo rm -rf /usr/share/sosreport/sos/plugins/__pycache__/etcd.cpython-35.pyc
+						sudo rm -rf /usr/share/sosreport/sos/plugins/etcd.py
+						sudo rm -rf /var/lib/etcd
+						sudo rm -rf /var/etcd 
+						sudo rm -rf /var/lib/kubelet
+						
+						'''
+					}
+				}
+			}
+		}
+        
+        stage('DeployMaster') {
+            agent { 
+                label 'e2e-slave2'
+            }
+            steps {
+                unstash 'ServerBinaryTar'
+                unstash 'master-user-data'
+				unstash 'configure-vm.sh'
+                sh '''
+                set -e
+                
+                export GOROOT=/usr/local/go
+                export GOPATH=$PWD
+                export PATH=$GOROOT/bin:$HOME/bin:$GOPATH/bin:$PATH
+                export KUBE_ROOT=$GOPATH/src/k8s.io/kubernetes
+                
+                pwd
+                
+                cp $KUBE_ROOT/cluster/aws/configure-vm.sh /tmp/bootstrap-script
+                chmod 755 /tmp/bootstrap-script
+                cp $KUBE_ROOT/_output/release-tars/kubernetes-server-linux-amd64.tar.gz /tmp/kubernetes-server-linux-amd64.tar.gz
+                
+                chmod 755 $GOPATH/master-user-data
+                sudo $GOPATH/master-user-data
+                sudo /tmp/bootstrap-script
+                
+                sudo cp /home/$PARAMS_DEFAULT_USER/.kube/config $GOPATH/config
+                
+                '''
+                stash includes: 'config', name: 'config'
+            }
+        }        
+        stage('DeployMinion1') {
+            agent { 
+                label 'e2e-slave3'
+            }
+            steps {
+                unstash 'ServerBinaryTar'
+                unstash 'node-user-data'
+				unstash 'configure-vm.sh'
+                sh '''
+                set -e
+                
+                export GOROOT=/usr/local/go
+                export GOPATH=$PWD
+                export PATH=$GOROOT/bin:$HOME/bin:$GOPATH/bin:$PATH
+                export KUBE_ROOT=$GOPATH/src/k8s.io/kubernetes
+                
+                pwd
+                
+                cp $KUBE_ROOT/cluster/aws/configure-vm.sh /tmp/bootstrap-script
+                chmod 755 /tmp/bootstrap-script
+                cp $KUBE_ROOT/_output/release-tars/kubernetes-server-linux-amd64.tar.gz /tmp/kubernetes-server-linux-amd64.tar.gz
+                
+                chmod 755 $GOPATH/node-user-data
+                sudo $GOPATH/node-user-data
+                sudo /tmp/bootstrap-script
+                
+                '''
+            }
+        }
+        stage('Test') {
+            agent { 
+                label 'e2e-slave1'
+            }
+            steps {
+                unstash 'config'
+				unstash 'kubectl'
+                sh '''#!/bin/bash
+                set -e
+                
+                export GOROOT=/usr/local/go
+                export GOPATH=$PWD
+                export PATH=$GOROOT/bin:$HOME/bin:$GOPATH/bin:$PATH
+                export KUBE_ROOT=$GOPATH/src/k8s.io/kubernetes
+                export KUBECONFIG=/var/lib/jenkins/.kube/config
+                export PRESET_KUBE_MASTER_IP=$PARAMS_KUBE_MASTER_IP
+                
+                pwd
+                
+                cp $GOPATH/config $KUBECONFIG
+                sed -i "s/server: https:\\/\\/.*:6443/server: https:\\/\\/${PRESET_KUBE_MASTER_IP}:6443/" /var/lib/jenkins/.kube/config
+                
+                cp $KUBE_ROOT/_output/dockerized/bin/linux/amd64/kubectl $HOME/bin/kubectl
+                kubectl get nodes
+                kubectl get pods --all-namespaces -o wide
+                
+                cd /tmp
+                wget https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+                kubectl --kubeconfig=$KUBECONFIG create -f /tmp/kube-flannel.yml
+                
+                cd $KUBE_ROOT
+                export KUBE_MASTER_URL=https://${PRESET_KUBE_MASTER_IP}:6443
+                #kubetest --test --test_args="--ginkgo.focus=should.?run.?and.?stop.?simple.?daemon" --provider=local
+				kubetest --test --test_args="--ginkgo.focus=\\[Arktos-CI\\]" --provider=local
+                '''
+            }
+        }
+    }
+}
