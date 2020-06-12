@@ -21,8 +21,8 @@ pipeline {
                 pwd
                 cd $KUBE_ROOT
                 
-                #make clean
-                #source $KUBE_ROOT/aws_build_version && make quick-release
+                make clean
+                source $KUBE_ROOT/aws_build_version && make quick-release
                 
                 source $KUBE_ROOT/aws_kube_params.inc
                 PRESET_KUBE_MASTER_IP=$PARAMS_KUBE_MASTER_IP
@@ -226,16 +226,9 @@ pipeline {
                 sudo /tmp/bootstrap-script
                 
                 sudo cp /home/${PARAMS_DEFAULT_USER}/.kube/config $GOPATH/config
-		sudo chown jenkins $GOPATH/config
-		cat $GOPATH/config
-                
-                '''
-		
+		sudo chown jenkins $GOPATH/config                
+                '''		
                 stash includes: 'config', name: 'config'
-		
-		sh '''
-		echo ok
-		'''
             }
         }        
         stage('DeployMinion1') {
@@ -299,8 +292,7 @@ pipeline {
                 
                 cd $KUBE_ROOT
                 export KUBE_MASTER_URL=https://${PRESET_KUBE_MASTER_IP}:6443
-                #kubetest --test --test_args="--ginkgo.focus=should.?run.?and.?stop.?simple.?daemon" --provider=local
-				kubetest --test --test_args="--ginkgo.focus=\\[Arktos-CI\\]" --provider=local
+		kubetest --test --test_args="--ginkgo.focus=\\[Arktos-CI\\]" --provider=local
                 '''
             }
         }
