@@ -226,7 +226,7 @@ pipeline {
                 sudo /tmp/bootstrap-script
                 
                 sudo cp /home/${PARAMS_DEFAULT_USER}/.kube/config $GOPATH/config
-		cat $GOPATH/config
+		sudo cat $GOPATH/config
                 
                 '''
 		
