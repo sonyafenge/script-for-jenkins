@@ -21,8 +21,8 @@ pipeline {
                 pwd
                 cd $KUBE_ROOT
                 
-                make clean
-                source $KUBE_ROOT/aws_build_version && make quick-release
+                #make clean
+                #source $KUBE_ROOT/aws_build_version && make quick-release
                 
                 source $KUBE_ROOT/aws_kube_params.inc
                 PRESET_KUBE_MASTER_IP=$PARAMS_KUBE_MASTER_IP
@@ -226,9 +226,15 @@ pipeline {
                 sudo /tmp/bootstrap-script
                 
                 sudo cp /home/${PARAMS_DEFAULT_USER}/.kube/config $GOPATH/config
+		cat $GOPATH/config
                 
                 '''
+		
                 stash includes: 'config', name: 'config'
+		
+		sh '''
+		echo ok
+		'''
             }
         }        
         stage('DeployMinion1') {
