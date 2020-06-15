@@ -27,7 +27,7 @@ pipeline {
                 source $KUBE_ROOT/aws_kube_params.inc
                 PRESET_KUBE_MASTER_IP=$PARAMS_KUBE_MASTER_IP
                 PRESET_INSTANCES_ENABLED=true
-                IS_DRY_RUN=true
+                IS_PRESET_INSTANCES_DRY_RUN=true
                 
                 chmod 755 $KUBE_ROOT/cluster/kube-up.sh
                 $KUBE_ROOT/cluster/kube-up.sh
