@@ -7,7 +7,7 @@ pipeline {
             }
             steps {
                 dir('src/k8s.io/kubernetes') {
-                    git branch: 'hc-test', credentialsId: 'ed65dd2c-2efa-48a8-bd14-6baef33ba29f', url: 'https://github.com/Hong-Chang/arktos'
+                    git branch: 'hc-e2e', credentialsId: 'ed65dd2c-2efa-48a8-bd14-6baef33ba29f', url: 'https://github.com/Hong-Chang/arktos'
                 }
                 
                 sh '''#!/bin/bash
