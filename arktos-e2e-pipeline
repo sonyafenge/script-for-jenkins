@@ -31,8 +31,6 @@ pipeline {
                 
                 chmod 755 $KUBE_ROOT/cluster/kube-up.sh
                 $KUBE_ROOT/cluster/kube-up.sh
-		echo KUBE_TEMP
-		echo $KUBE_TEMP
                 cp /tmp/master-user-data $GOPATH/master-user-data
                 cp /tmp/node-user-data $GOPATH/node-user-data
                 
